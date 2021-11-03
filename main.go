@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/maaslalani/confetty/confetti"
 	"github.com/maaslalani/slides/internal/model"
 	"github.com/maaslalani/slides/internal/navigation"
 )
@@ -31,6 +32,10 @@ func main() {
 		Date:     time.Now().Format("2006-01-02"),
 		FileName: fileName,
 		Search:   navigation.NewSearch(),
+		Confetti: struct {
+			Active bool
+			Model  tea.Model
+		}{Active: false, Model: confetti.InitialModel()},
 	}
 	err = presentation.Load()
 	if err != nil {

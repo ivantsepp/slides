@@ -4,14 +4,15 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"github.com/maaslalani/slides/internal/file"
-	"github.com/maaslalani/slides/internal/navigation"
-	"github.com/maaslalani/slides/internal/process"
 	"io"
 	"io/ioutil"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/maaslalani/slides/internal/file"
+	"github.com/maaslalani/slides/internal/navigation"
+	"github.com/maaslalani/slides/internal/process"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -39,13 +40,19 @@ type Model struct {
 	// original slides, it will be displayed on a slide and reset on page change
 	VirtualText string
 	Search      navigation.Search
+	Confetti    struct {
+		Active bool
+		Model  tea.Model
+	}
 }
 
 type fileWatchMsg struct{}
+type confettiMsg struct{}
 
 var fileInfo os.FileInfo
 
 func (m Model) Init() tea.Cmd {
+	m.Confetti.Model.Init()
 	if m.FileName == "" {
 		return nil
 	}
@@ -56,6 +63,14 @@ func (m Model) Init() tea.Cmd {
 func fileWatchCmd() tea.Cmd {
 	return tea.Every(time.Second, func(t time.Time) tea.Msg {
 		return fileWatchMsg{}
+	})
+}
+
+const fps = 60
+
+func confettiCmd() tea.Cmd {
+	return tea.Every(time.Second/fps, func(t time.Time) tea.Msg {
+		return confettiMsg{}
 	})
 }
 
@@ -96,16 +111,16 @@ func (m *Model) Load() error {
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case confettiMsg:
+		m.Confetti.Model, _ = m.Confetti.Model.Update(msg)
+		return m, confettiCmd()
 	case tea.WindowSizeMsg:
 		m.viewport.Width = msg.Width
 		m.viewport.Height = msg.Height
 		return m, nil
-
 	case tea.KeyMsg:
 		keyPress := msg.String()
-
 		if m.Search.Active {
-
 			switch msg.Type {
 			case tea.KeyEnter:
 				// execute current buffer
@@ -151,6 +166,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				outs = append(outs, res.Out)
 			}
 			m.VirtualText = strings.Join(outs, "\n")
+		case "ctrl+p":
+			m.Confetti.Active = true
+			return m, confettiCmd()
 		case "ctrl+c", "q":
 			return m, tea.Quit
 		default:
@@ -162,7 +180,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.buffer = newState.Buffer
 			m.SetPage(newState.Page)
 		}
-
 	case fileWatchMsg:
 		newFileInfo, err := os.Stat(m.FileName)
 		if err == nil && newFileInfo.ModTime() != fileInfo.ModTime() {
@@ -178,6 +195,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) View() string {
+	if m.Confetti.Active {
+		return m.Confetti.Model.View()
+	}
+
 	r, _ := glamour.NewTermRenderer(m.Theme, glamour.WithWordWrap(m.viewport.Width))
 	slide := m.Slides[m.Page]
 	slide, err := r.Render(slide)
